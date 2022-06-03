@@ -1,4 +1,5 @@
-﻿using Autodesk.Revit.Attributes;
+﻿using Autodesk.Revit.ApplicationServices;
+using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.DB.Structure;
 using Autodesk.Revit.UI;
@@ -16,6 +17,8 @@ namespace CreationModePlugin
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
             Document doc = commandData.Application.ActiveUIDocument.Document;
+            double width = UnitUtils.ConvertToInternalUnits(10000, UnitTypeId.Millimeters);
+            double depth = UnitUtils.ConvertToInternalUnits(5000, UnitTypeId.Millimeters);
             List<Level> listLevel = new FilteredElementCollector(doc)
                 .OfClass(typeof(Level))
                 .OfType<Level>()
@@ -27,7 +30,7 @@ namespace CreationModePlugin
             Level level2 = listLevel
                .Where(x => x.Name.Equals("Уровень 2"))
                .FirstOrDefault();
-            List<Wall> walls = CreateWalls(doc, level1, level2);
+            List<Wall> walls = CreateWalls(doc, level1, level2, width, depth);
             AddDoor(doc, level1, walls[0]);
             for (int i = 1; i < walls.Count; i++)
             {
@@ -35,8 +38,48 @@ namespace CreationModePlugin
                 
                 
             }
-                
+            AddRoof(doc, level2,walls, width, depth); 
             return Result.Succeeded;
+        }
+
+        private void AddRoof(Document doc, Level level2, List<Wall> walls, double width, double depth)
+        {
+            RoofType roofType = new FilteredElementCollector(doc)
+                 .OfClass(typeof(RoofType))
+                 .OfType<RoofType>()
+                 .Where(x => x.Name.Equals("Типовой - 400мм"))
+                 .Where(x => x.FamilyName.Equals("Базовая крыша"))
+                 .FirstOrDefault();
+            double wallWidth = walls[0].Width;
+            double dx = width / 2;
+            double dy = depth / 2;
+            double dz = level2.Elevation;
+            double dz1 = dz*2;
+
+
+
+            CurveArray curveArray = new CurveArray();
+            curveArray.Append(Line.CreateBound(new XYZ(-dx - wallWidth / 2, -dy - wallWidth / 2, dz), new XYZ(-dx - wallWidth / 2, 0, dz1)));
+            curveArray.Append(Line.CreateBound(new XYZ(-dx - wallWidth / 2, 0, dz1), new XYZ(-dx - wallWidth / 2, dy + wallWidth / 2, dz)));
+
+
+
+            Application application = doc.Application;
+            CurveArray footprint = doc.Application.Create.NewCurveArray();
+            
+                
+               
+            
+
+            Transaction transaction4 = new Transaction(doc, "Построение крыши");
+            
+                transaction4.Start();
+            ReferencePlane plane = doc.Create.NewReferencePlane(new XYZ(0, 0, 0), new XYZ(0, 0, 20 ), new XYZ(0, dy, 0), doc.ActiveView);
+                doc.Create.NewExtrusionRoof(curveArray, plane, level2, roofType, -dx - wallWidth / 2, dx + wallWidth / 2);
+            transaction4.Commit();
+            
+
+
         }
 
         public static void AddDoor(Document doc, Level level1, Wall wall)
@@ -86,15 +129,11 @@ namespace CreationModePlugin
             transaction3.Commit();
             return w;
         }
-        public List<Wall> CreateWalls(Document doc, Level level1, Level level2)
+        public List<Wall> CreateWalls(Document doc, Level level1, Level level2, double width, double depth)
         {
 
-            
-
-            double width = UnitUtils.ConvertToInternalUnits(10000, UnitTypeId.Millimeters);
-            double depth = UnitUtils.ConvertToInternalUnits(5000, UnitTypeId.Millimeters);
             double dx = width / 2;
-            double dy = width / 2;
+            double dy = depth / 2;
 
             List<XYZ> points = new List<XYZ>();
             points.Add(new XYZ(-dx, -dy, 0));
